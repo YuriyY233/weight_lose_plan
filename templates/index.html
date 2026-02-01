@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>智能减肥计划生成器</title>
+    <style>
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .plan-result { margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px; }
+        
+        /* Markdown 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>个性化减肥计划生成器</h1>
+        
+        <form id="dietForm">
+            <div class="form-group">
+                <label>年龄:</label>
+                <input type="number" name="age" required>
+            </div>
+            
+            <div class="form-group">
+                <label>性别:</label>
+                <select name="gender" required>
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>当前体重 (kg):</label>
+                <input type="number" step="0.1" name="weight" required>
+            </div>
+            
+            <div class="form-group">
+                <label>目标体重 (kg):</label>
+                <input type="number" step="0.1" name="target_weight" required>
+            </div>
+            
+            <div class="form-group">
+                <label>身高 (cm):</label>
+                <input type="number" name="height" required>
+            </div>
+            
+            <div class="form-group">
+                <label>活动水平:</label>
+                <select name="activity_level" required>
+                    <option value="sedentary">久坐</option>
+                    <option value="light">轻度活动</option>
+                    <option value="moderate">中度活动</option>
+                    <option value="active">高度活动</option>
+                </select>
+            </div>
+            
+            <button type="submit">生成减肥计划</button>
+        </form>
+        
+        <div id="planResult" class="plan-result" style="display: none;"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        document.getElementById('dietForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const userData = Object.fromEntries(formData);
+            const resultDiv = document.getElementById('planResult');
+            const submitBtn = this.querySelector('button[type="submit"]');
+            
+            // 准备 UI
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p>正在生成您的专属计划，请稍候...</p>';
+            submitBtn.disabled = true;
+            submitBtn.textContent = '生成中...';
+            
+            try {
+                const response = await fetch('/generate_plan', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let accumulatedText = '';
+                
+                // 清空初始加载提示
+                resultDiv.innerHTML = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // 解码数据块并累加
+                    const chunk = decoder.decode(value, { stream: true });
+                    accumulatedText += chunk;
+                    
+                    // 预处理 Markdown：确保表格前有空行，否则 marked 可能无法正确解析表格
+                    // 将 "非空行\n|..." 替换为 "非空行\n\n|..."
+                    // const formattedText = accumulatedText.replace(/([^\n])\n(\|.*\|)/g, '$1\n\n$2');
+                    
+                    // 实时更新显示内容：使用 marked 渲染 Markdown
+                    resultDiv.innerHTML = marked.parse(accumulatedText);
+                    
+                    // 自动滚动到底部
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+            } catch (error) {
+                console.error('请求失败:', error);
+                resultDiv.innerHTML += `<p style="color: red;">生成过程中发生错误: ${error.message}</p>`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '生成减肥计划';
+            }
+        });
+    </script>
+</body>
+</html>
